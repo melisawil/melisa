@@ -2,12 +2,14 @@ import os
 import sqlite3
 from datetime import datetime
 from aiogram import Bot, Dispatcher, types
-from aiogram.filters import Command
+from aiogram.contrib.middlewares.logging import LoggingMiddleware
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
+from aiogram.utils import executor
 
 TOKEN = os.getenv('BOT_TOKEN')
 bot = Bot(token=TOKEN)
-dp = Dispatcher()
+dp = Dispatcher(bot)
+dp.middleware.setup(LoggingMiddleware())
 
 # База данных
 conn = sqlite3.connect('data.db', check_same_thread=False)
@@ -43,7 +45,7 @@ keyboard = ReplyKeyboardMarkup(
     resize_keyboard=True
 )
 
-@dp.message(Command("start"))
+@dp.message_handler(commands=['start'])
 async def start(msg: types.Message):
     cursor.execute(
         "INSERT OR IGNORE INTO users (telegram_id, username, created_at) VALUES (?, ?, ?)",
@@ -58,7 +60,7 @@ async def start(msg: types.Message):
         reply_markup=keyboard
     )
 
-@dp.message(lambda msg: msg.text == "📋 Список")
+@dp.message_handler(lambda msg: msg.text == "📋 Список")
 async def show_list(msg: types.Message):
     cursor.execute("SELECT id, name, price FROM items ORDER BY id DESC LIMIT 20")
     items = cursor.fetchall()
@@ -73,7 +75,7 @@ async def show_list(msg: types.Message):
     
     await msg.answer(text, parse_mode="Markdown")
 
-@dp.message(lambda msg: msg.text == "➕ Добавить")
+@dp.message_handler(lambda msg: msg.text == "➕ Добавить")
 async def add_prompt(msg: types.Message):
     await msg.answer(
         "✏️ *Добавление записи*\n\n"
@@ -84,7 +86,7 @@ async def add_prompt(msg: types.Message):
         parse_mode="Markdown"
     )
 
-@dp.message(lambda msg: msg.text and " | " in msg.text)
+@dp.message_handler(lambda msg: msg.text and " | " in msg.text)
 async def process_add(msg: types.Message):
     try:
         parts = msg.text.split(" | ")
@@ -102,14 +104,14 @@ async def process_add(msg: types.Message):
             f"✅ *Добавлено!*\n\n📦 {name}\n💰 {price} руб.\n📝 {description}",
             parse_mode="Markdown"
         )
-    except:
-        await msg.answer("❌ Ошибка! Используй формат: `Название | Цена | Описание`", parse_mode="Markdown")
+    except Exception as e:
+        await msg.answer(f"❌ Ошибка: {str(e)}\n\nИспользуй формат:\n`Название | Цена | Описание`", parse_mode="Markdown")
 
-@dp.message(lambda msg: msg.text == "🔍 Поиск")
+@dp.message_handler(lambda msg: msg.text == "🔍 Поиск")
 async def search_prompt(msg: types.Message):
     await msg.answer("🔍 *Введи текст для поиска*", parse_mode="Markdown")
 
-@dp.message(lambda msg: msg.text and not msg.text.startswith("/") and msg.text not in ["📋 Список", "➕ Добавить", "🔍 Поиск", "📊 Статистика"])
+@dp.message_handler(lambda msg: msg.text and not msg.text.startswith("/") and msg.text not in ["📋 Список", "➕ Добавить", "🔍 Поиск", "📊 Статистика"])
 async def search(msg: types.Message):
     cursor.execute(
         "SELECT id, name, price FROM items WHERE name LIKE ? OR description LIKE ? LIMIT 10",
@@ -127,7 +129,7 @@ async def search(msg: types.Message):
     
     await msg.answer(text, parse_mode="Markdown")
 
-@dp.message(lambda msg: msg.text == "📊 Статистика")
+@dp.message_handler(lambda msg: msg.text == "📊 Статистика")
 async def stats(msg: types.Message):
     cursor.execute("SELECT COUNT(*) FROM items")
     total = cursor.fetchone()[0]
@@ -142,7 +144,7 @@ async def stats(msg: types.Message):
         parse_mode="Markdown"
     )
 
-@dp.message(Command("help"))
+@dp.message_handler(commands=['help'])
 async def help_cmd(msg: types.Message):
     await msg.answer(
         "📖 *Команды:*\n"
@@ -152,10 +154,5 @@ async def help_cmd(msg: types.Message):
         parse_mode="Markdown"
     )
 
-async def main():
-    print("🤖 Бот запущен!")
-    await dp.start_polling(bot)
-
 if __name__ == "__main__":
-    import asyncio
-    asyncio.run(main())
+    executor.start_polling(dp, skip_updates=True)
