@@ -1,10 +1,10 @@
-import os
 import sqlite3
 from datetime import datetime
 import telebot
 from telebot import types
 
-TOKEN = os.getenv('BOT_TOKEN')
+TOKEN = "8970283323:AAHo6NZTIAi-ckdi-M9hxCa-dGrThesXRK0"
+
 bot = telebot.TeleBot(TOKEN)
 
 # База данных
